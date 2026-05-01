@@ -19,7 +19,7 @@ load_dotenv()
 
 # Paths
 APP_DIR = Path(__file__).resolve().parent          # .../app
-ROOT_DIR = APP_DIR.parent                         # .../appswire
+ROOT_DIR = APP_DIR.parent                          # .../appswire
 STORAGE_DIR = ROOT_DIR / "storage"
 PROJECTS_DIR = STORAGE_DIR / "projects"
 PROJECTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -33,6 +33,7 @@ templates = Jinja2Templates(directory=str(APP_DIR / "templates"))
 
 # Static assets (css/js/favicon)
 app.mount("/static", StaticFiles(directory=str(APP_DIR / "static")), name="static")
+
 # Uploaded assets (images/files) live in storage/
 app.mount("/media", StaticFiles(directory=str(STORAGE_DIR)), name="media")
 
@@ -74,12 +75,20 @@ def safe_filename(name: str) -> str:
     return name[:180] if len(name) > 180 else name
 
 
+def is_admin(request: Request) -> bool:
+    return request.cookies.get("admin") == (os.getenv("ADMIN_PASSWORD") or "")
+
+
 # ---------------- FRONT ----------------
 
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request, db: Session = Depends(get_db)):
     projects = db.query(Project).order_by(Project.id.desc()).all()
-    return templates.TemplateResponse(request, "index.html", {"projects": projects})
+    return templates.TemplateResponse(
+        request,
+        "index.html",
+        {"projects": projects}
+    )
 
 
 @app.get("/instruction/{project_id}", response_class=HTMLResponse)
@@ -92,9 +101,14 @@ def instruction(project_id: int, request: Request, db: Session = Depends(get_db)
         p.instruction_md,
         extensions=["fenced_code", "tables"]
     )
+
     return templates.TemplateResponse(
+        request,
         "instruction.html",
-        {"request": request, "project": p, "content": html}
+        {
+            "project": p,
+            "content": html
+        }
     )
 
 
@@ -115,18 +129,25 @@ def download(action_id: int, db: Session = Depends(get_db)):
 
 @app.get("/admin", response_class=HTMLResponse)
 def admin(request: Request, db: Session = Depends(get_db)):
-    authed = request.cookies.get("admin") == (os.getenv("ADMIN_PASSWORD") or "")
-    if not authed:
+    if not is_admin(request):
         return templates.TemplateResponse(
-    request,
-    "admin.html",
-    {"dashboard": False}
-)
+            request,
+            "admin.html",
+            {
+                "dashboard": False
+            }
+        )
 
     projects = db.query(Project).order_by(Project.id.desc()).all()
+
     return templates.TemplateResponse(
+        request,
         "admin.html",
-        {"request": request, "dashboard": True, "projects": projects, "edit_project": None}
+        {
+            "dashboard": True,
+            "projects": projects,
+            "edit_project": None
+        }
     )
 
 
@@ -136,6 +157,7 @@ def admin_login(password: str = Form(...)):
         r = RedirectResponse("/admin", status_code=302)
         r.set_cookie("admin", password, httponly=True, samesite="lax")
         return r
+
     return RedirectResponse("/admin", status_code=302)
 
 
@@ -149,11 +171,18 @@ def admin_logout():
 @app.get("/admin/edit/{project_id}", response_class=HTMLResponse)
 def admin_edit(project_id: int, request: Request, db: Session = Depends(get_db)):
     check_admin(request)
+
     projects = db.query(Project).order_by(Project.id.desc()).all()
     edit_project = db.query(Project).get(project_id)
+
     return templates.TemplateResponse(
+        request,
         "admin.html",
-        {"request": request, "dashboard": True, "projects": projects, "edit_project": edit_project}
+        {
+            "dashboard": True,
+            "projects": projects,
+            "edit_project": edit_project
+        }
     )
 
 
@@ -168,6 +197,7 @@ def admin_delete(project_id: int, request: Request, db: Session = Depends(get_db
 
     # remove all project files
     shutil.rmtree(PROJECTS_DIR / str(project_id), ignore_errors=True)
+
     return RedirectResponse("/admin", status_code=302)
 
 
@@ -206,6 +236,7 @@ async def admin_save(
         p = db.query(Project).get(project_id)
         if not p:
             return RedirectResponse("/admin", status_code=302)
+
         p.title = title
         p.description = description
         p.version = version
@@ -233,10 +264,13 @@ async def admin_save(
     elif image_mode == "upload":
         if image_file and image_file.filename:
             ensure_project_dirs(p.id)
+
             ext = Path(image_file.filename).suffix.lower()
             if ext not in [".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".ico"]:
                 ext = ".png"
+
             img_abs = (PROJECTS_DIR / str(p.id)) / f"image{ext}"
+
             with open(img_abs, "wb") as f:
                 shutil.copyfileobj(image_file.file, f)
 
@@ -280,18 +314,22 @@ async def admin_save(
                     if abs_old.exists():
                         try:
                             abs_old.unlink()
-                        except:
+                        except OSError:
                             pass
+
                 fp = None
 
             else:
                 uploaded = action_file[i] if i < len(action_file) else None
+
                 if uploaded and uploaded.filename:
                     d = ensure_project_dirs(p.id) / "files"
                     out_name = safe_filename(Path(uploaded.filename).name)
                     out_abs = d / out_name
+
                     with open(out_abs, "wb") as f:
                         shutil.copyfileobj(uploaded.file, f)
+
                     fp = f"projects/{p.id}/files/{out_abs.name}"
                 else:
                     # keep existing if no new upload
@@ -303,4 +341,5 @@ async def admin_save(
             continue
 
     db.commit()
+
     return RedirectResponse(f"/admin/edit/{p.id}", status_code=302)

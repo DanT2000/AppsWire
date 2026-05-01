@@ -10,7 +10,8 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app ./app
-COPY storage ./storage
+
+RUN mkdir -p /app/storage
 
 EXPOSE 8090
 

@@ -117,7 +117,11 @@ def download(action_id: int, db: Session = Depends(get_db)):
 def admin(request: Request, db: Session = Depends(get_db)):
     authed = request.cookies.get("admin") == (os.getenv("ADMIN_PASSWORD") or "")
     if not authed:
-        return templates.TemplateResponse("admin.html", {"request": request, "dashboard": False})
+        return templates.TemplateResponse(
+    request,
+    "admin.html",
+    {"dashboard": False}
+)
 
     projects = db.query(Project).order_by(Project.id.desc()).all()
     return templates.TemplateResponse(

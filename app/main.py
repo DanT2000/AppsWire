@@ -79,7 +79,7 @@ def safe_filename(name: str) -> str:
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request, db: Session = Depends(get_db)):
     projects = db.query(Project).order_by(Project.id.desc()).all()
-    return templates.TemplateResponse("index.html", {"request": request, "projects": projects})
+    return templates.TemplateResponse(request, "index.html", {"projects": projects})
 
 
 @app.get("/instruction/{project_id}", response_class=HTMLResponse)

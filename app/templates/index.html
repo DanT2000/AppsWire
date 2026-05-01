@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AppsWire</title>
+  <link rel="icon" href="/static/favicon.ico">
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <div class="background"></div>
+
+  <div class="container">
+    <header class="header">
+      <h1>AppsWire</h1>
+      <div class="subtitle">Applications · Tools · Experiments</div>
+    </header>
+
+    {% if not projects %}
+      <div class="empty glass">
+        Пока нет проектов. Зайди в <a href="/admin">админку</a> и добавь первый.
+      </div>
+    {% endif %}
+
+    {% for p in projects %}
+      {% set img = None %}
+      {% if p.image_url %}
+        {% set img = p.image_url %}
+      {% elif p.image_path %}
+        {% set img = "/media/" + p.image_path %}
+      {% endif %}
+
+      <article class="card glass">
+        {% if img %}
+          <div class="card-media">
+            <img src="{{ img }}" alt="cover" loading="lazy">
+          </div>
+        {% endif %}
+
+        <div class="card-content">
+          <div class="title-row">
+            <h2>{{ p.title }}</h2>
+            <span class="version">v{{ p.version }}</span>
+          </div>
+
+          <p class="desc">{{ p.description }}</p>
+
+          <div class="actions">
+            {% for a in p.actions %}
+              {% if a.kind == "download" and a.file_path %}
+                <a class="btn btn-download {% if a.is_primary %}primary{% endif %}" href="/download/{{ a.id }}">
+                  {{ a.label }}
+                </a>
+              {% endif %}
+            {% endfor %}
+
+            {% if p.instruction_md and p.instruction_md.strip() %}
+              <a class="btn btn-doc" href="/instruction/{{ p.id }}">Instruction</a>
+            {% endif %}
+
+            {% for a in p.actions %}
+              {% if a.kind == "link" and a.url %}
+                <a class="icon-link" href="{{ a.url }}" target="_blank" title="{{ a.label }}">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M12 2a10 10 0 100 20 10 10 0 000-20Zm7.93 9h-3.02a15.7 15.7 0 00-1.2-5.02A8.03 8.03 0 0119.93 11ZM12 4c.9 0 2.1 1.78 2.74 5H9.26C9.9 5.78 11.1 4 12 4ZM4.07 13h3.02c.25 1.83.83 3.58 1.7 5.02A8.03 8.03 0 014.07 13Zm3.02-2H4.07a8.03 8.03 0 014.91-5.02c-.87 1.44-1.45 3.19-1.7 5.02Zm2.17 2h5.48C14.1 18.22 12.9 20 12 20s-2.1-1.78-2.74-7Zm7.65 0h3.02a8.03 8.03 0 01-4.91 5.02c.87-1.44 1.45-3.19 1.7-5.02Zm-1.7-2H8.79c.09-1.79.42-3.5.9-5h4.62c.48 1.5.81 3.21.9 5Z"/>
+                  </svg>
+                </a>
+              {% endif %}
+            {% endfor %}
+          </div>
+        </div>
+      </article>
+    {% endfor %}
+  </div>
+</body>
+</html>

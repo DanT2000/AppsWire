@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AppsWire Admin</title>
+  <link rel="icon" href="/static/favicon.ico">
+  <link rel="stylesheet" href="/static/admin.css" />
+</head>
+<body>
+  <div class="background"></div>
+
+  <div class="container">
+
+    {% if not dashboard %}
+      <div class="glass panel">
+        <h2>Admin Login</h2>
+        <form method="post" action="/admin/login">
+          <input type="password" name="password" placeholder="Admin password" required />
+          <button type="submit" class="btn primary">Login</button>
+        </form>
+      </div>
+    {% else %}
+      <div class="topbar">
+        <div class="brand">AppsWire Admin</div>
+        <a class="logout" href="/admin/logout">Logout</a>
+      </div>
+
+      <div class="grid">
+        <!-- Left: form -->
+        <div class="glass panel">
+          <h3>
+            {% if edit_project %}Edit project #{{ edit_project.id }}{% else %}Create project{% endif %}
+          </h3>
+
+          <form method="post" action="/admin/save" enctype="multipart/form-data" id="projectForm">
+            <input type="hidden" name="project_id" value="{% if edit_project %}{{ edit_project.id }}{% else %}0{% endif %}" />
+
+            <label>Title *</label>
+            <input type="text" name="title" required value="{% if edit_project %}{{ edit_project.title }}{% endif %}">
+
+            <label>Description *</label>
+            <textarea name="description" required class="auto">{% if edit_project %}{{ edit_project.description }}{% endif %}</textarea>
+
+            <div class="row">
+              <div>
+                <label>Version</label>
+                <input type="text" name="version" value="{% if edit_project %}{{ edit_project.version }}{% else %}1.0.0{% endif %}">
+              </div>
+              <div class="hint">
+                Primary download = зелёная кнопка.
+              </div>
+            </div>
+
+            <hr>
+
+            <label>Image</label>
+            <div class="row">
+              <select name="image_mode" id="image_mode">
+                <option value="none" {% if edit_project and not edit_project.image_url and not edit_project.image_path %}selected{% endif %}>None</option>
+                <option value="url" {% if edit_project and edit_project.image_url %}selected{% elif not edit_project %}selected{% endif %}>URL</option>
+                <option value="upload" {% if edit_project and edit_project.image_path %}selected{% endif %}>Upload</option>
+              </select>
+
+              <input type="text" name="image_url" id="image_url" placeholder="https://..." value="{% if edit_project %}{{ edit_project.image_url or '' }}{% endif %}">
+            </div>
+
+            <input type="file" name="image_file" id="image_file" />
+
+            {% if edit_project and (edit_project.image_url or edit_project.image_path) %}
+              <div class="preview">
+                <div class="small">Current:</div>
+                {% if edit_project.image_url %}
+                  <img src="{{ edit_project.image_url }}" alt="preview">
+                {% else %}
+                  <img src="/media/{{ edit_project.image_path }}" alt="preview">
+                {% endif %}
+              </div>
+            {% endif %}
+
+            <hr>
+
+            <label>Instruction (Markdown)</label>
+            <textarea name="instruction_md" class="auto md">{% if edit_project %}{{ edit_project.instruction_md or '' }}{% endif %}</textarea>
+
+            <hr>
+
+            <div class="actions-head">
+              <div class="label">Actions</div>
+              <button type="button" class="btn" id="addAction">+ Add action</button>
+            </div>
+
+            <div id="actionsList">
+              {% if edit_project %}
+                {% for a in edit_project.actions %}
+                  <div class="action-row">
+                    <div class="row">
+                      <select name="action_kind">
+                        <option value="download" {% if a.kind=='download' %}selected{% endif %}>download</option>
+                        <option value="link" {% if a.kind=='link' %}selected{% endif %}>link</option>
+                      </select>
+
+                      <input type="text" name="action_label" placeholder="Button label" value="{{ a.label }}" required>
+
+                      <label class="radio">
+                        <input type="radio" name="primary_index" value="{{ loop.index0 }}" {% if a.is_primary %}checked{% endif %}>
+                        primary
+                      </label>
+                    </div>
+
+                    <!-- preserve existing file + allow clear -->
+                    <input type="hidden" name="action_existing_file" value="{{ a.file_path or '' }}">
+                    <input type="hidden" name="action_clear_file" value="0">
+
+                    <div class="row">
+                      <input type="text" name="action_url" class="url" placeholder="https://..." value="{{ a.url or '' }}">
+                      <input type="file" name="action_file" class="file">
+                    </div>
+
+                    <div class="row small">
+                      {% if a.kind=='download' and a.file_path %}
+                        <span>Current file: <code>{{ a.file_path }}</code></span>
+                        <button type="button" class="btn danger clearFileBtn">Clear file</button>
+                      {% elif a.kind=='link' and a.url %}
+                        <span>Link: <code>{{ a.url }}</code></span>
+                      {% else %}
+                        <span></span>
+                      {% endif %}
+                      <button type="button" class="btn danger removeAction">Remove</button>
+                    </div>
+                  </div>
+                {% endfor %}
+              {% endif %}
+            </div>
+
+            <div class="footer">
+              <button type="submit" class="btn primary">
+                {% if edit_project %}Save{% else %}Create{% endif %}
+              </button>
+              {% if edit_project %}
+                <a class="btn" href="/admin">New</a>
+              {% endif %}
+            </div>
+          </form>
+        </div>
+
+        <!-- Right: list -->
+        <div class="glass panel">
+          <h3>Projects</h3>
+
+          {% if not projects %}
+            <div class="small">No projects yet.</div>
+          {% endif %}
+
+          {% for p in projects %}
+            <div class="project-item">
+              <div class="pi-main">
+                <div class="pi-title">{{ p.title }}</div>
+                <div class="pi-meta">v{{ p.version }} · #{{ p.id }}</div>
+              </div>
+
+              <div class="pi-actions">
+                <a class="btn" href="/admin/edit/{{ p.id }}">Edit</a>
+                <form method="post" action="/admin/delete/{{ p.id }}" onsubmit="return confirm('Delete project and all files?')">
+                  <button class="btn danger" type="submit">Delete</button>
+                </form>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <script>
+        // autosize textarea
+        function autosize(el){
+          el.style.height = 'auto';
+          el.style.height = (el.scrollHeight) + 'px';
+        }
+        document.querySelectorAll('textarea.auto').forEach(t=>{
+          autosize(t);
+          t.addEventListener('input', ()=>autosize(t));
+        });
+
+        // image mode toggle
+        const imageMode = document.getElementById('image_mode');
+        const imageUrl = document.getElementById('image_url');
+        const imageFile = document.getElementById('image_file');
+        function syncImageMode(){
+          const m = imageMode.value;
+          imageUrl.style.display = (m==='url') ? 'block' : 'none';
+          imageFile.style.display = (m==='upload') ? 'block' : 'none';
+        }
+        if (imageMode) { imageMode.addEventListener('change', syncImageMode); syncImageMode(); }
+
+        // actions dynamic
+        const actionsList = document.getElementById('actionsList');
+        const addBtn = document.getElementById('addAction');
+
+        function actionRowHTML(primaryValue){
+          return `
+          <div class="action-row">
+            <div class="row">
+              <select name="action_kind">
+                <option value="download" selected>download</option>
+                <option value="link">link</option>
+              </select>
+
+              <input type="text" name="action_label" placeholder="Button label" required>
+
+              <label class="radio">
+                <input type="radio" name="primary_index" value="${primaryValue}">
+                primary
+              </label>
+            </div>
+
+            <input type="hidden" name="action_existing_file" value="">
+            <input type="hidden" name="action_clear_file" value="0">
+
+            <div class="row">
+              <input type="text" name="action_url" class="url" placeholder="https://..." value="">
+              <input type="file" name="action_file" class="file">
+            </div>
+
+            <div class="row small">
+              <span></span>
+              <button type="button" class="btn danger clearFileBtn" style="display:none;">Clear file</button>
+              <button type="button" class="btn danger removeAction">Remove</button>
+            </div>
+          </div>`;
+        }
+
+        function reindexPrimary(){
+          const rows = [...actionsList.querySelectorAll('.action-row')];
+          rows.forEach((row, idx)=>{
+            const radio = row.querySelector('input[type="radio"][name="primary_index"]');
+            if (radio) radio.value = idx;
+          });
+        }
+
+        function syncActionRow(row){
+          const kind = row.querySelector('select[name="action_kind"]').value;
+          const url = row.querySelector('input[name="action_url"]');
+          const file = row.querySelector('input[name="action_file"]');
+
+          if (kind === 'link'){
+            url.style.display = 'block';
+            file.style.display = 'none';
+          } else {
+            url.style.display = 'none';
+            file.style.display = 'block';
+          }
+        }
+
+        function wireClearFile(row){
+          const btn = row.querySelector('.clearFileBtn');
+          if (!btn) return;
+          btn.addEventListener('click', () => {
+            const clearInput = row.querySelector('input[name="action_clear_file"]');
+            if (clearInput) clearInput.value = "1";
+
+            const info = row.querySelector('.small span');
+            if (info) info.innerHTML = "<span style='opacity:.7'>File will be removed on Save</span>";
+            btn.style.display = "none";
+          });
+        }
+
+        function wireRow(row){
+          row.querySelector('select[name="action_kind"]').addEventListener('change', ()=>{
+            syncActionRow(row);
+          });
+
+          row.querySelector('.removeAction').addEventListener('click', ()=>{
+            row.remove();
+            reindexPrimary();
+          });
+
+          wireClearFile(row);
+          syncActionRow(row);
+        }
+
+        // wire existing
+        actionsList.querySelectorAll('.action-row').forEach(wireRow);
+        reindexPrimary();
+
+        addBtn.addEventListener('click', ()=>{
+          const tmp = document.createElement('div');
+          tmp.innerHTML = actionRowHTML(actionsList.querySelectorAll('.action-row').length);
+          const row = tmp.firstElementChild;
+          actionsList.appendChild(row);
+          wireRow(row);
+          reindexPrimary();
+        });
+      </script>
+
+    {% endif %}
+  </div>
+</body>
+</html>
